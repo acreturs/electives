@@ -2,8 +2,9 @@
 
 import React, { useState, useCallback } from "react";
 import {
-  DndContext, DragEndEvent, DragOverEvent, DragStartEvent,
-  PointerSensor, useSensor, useSensors, DragOverlay, closestCorners,
+  DndContext, DragEndEvent, DragStartEvent,
+  PointerSensor, useSensor, useSensors, DragOverlay,
+  rectIntersection,
 } from "@dnd-kit/core";
 import {
   GraduationCap, LayoutDashboard, ShieldCheck, BookOpen,
@@ -23,10 +24,9 @@ import { Course, PlannedCourse } from "@/types";
 type RightPanel = "dashboard" | "validation";
 
 function useDarkMode() {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return document.documentElement.classList.contains("dark");
-  });
+  const [dark, setDark] = useState(() =>
+    typeof window !== "undefined" && document.documentElement.classList.contains("dark")
+  );
   const toggle = useCallback(() => {
     const next = !dark;
     document.documentElement.classList.toggle("dark", next);
@@ -48,7 +48,11 @@ export default function Home() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // Higher distance threshold → fewer accidental triggers
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
   const creditsBySemester = computeCreditsBySemester(semesters, plannedCourses);
   const totalCredits = plannedCourses.reduce((s, c) => s + (c.credits ?? 0), 0);
 
@@ -57,66 +61,68 @@ export default function Home() {
     setActiveItem(data);
   }
 
-  function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
-    const activeData = active.data.current as { course: Course | PlannedCourse; type: string };
-    const overId = String(over.id);
-    if (activeData.type === "planned") {
-      const activeInstanceId = String(active.id);
-      const activeCourse = activeData.course as PlannedCourse;
-      const fromSemId = activeCourse.semesterId;
-      const overSemester = semesters.find((s) => s.id === overId);
-      if (overSemester && overSemester.id !== fromSemId) {
-        moveCourse(activeInstanceId, overSemester.id); return;
-      }
-      const overCourse = plannedCourses.find((c) => c.instanceId === overId);
-      if (overCourse && overCourse.semesterId !== fromSemId) {
-        moveCourse(activeInstanceId, overCourse.semesterId, overId);
-      }
-    }
-  }
-
+  // All logic in dragEnd only — no state mutations during drag (prevents jumpiness)
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveItem(null);
     if (!over) return;
+
     const activeData = active.data.current as { course: Course | PlannedCourse; type: string };
     const overId = String(over.id);
 
+    // ── Catalog card dropped ──
     if (activeData.type === "catalog") {
       const course = activeData.course as Course;
+      // Dropped directly on a semester column?
+      const sem = semesters.find((s) => s.id === overId);
+      if (sem) { addCourseToSemester(course, sem.id); return; }
+      // Dropped on a planned card (infer its semester)
       const overPlanned = plannedCourses.find((c) => c.instanceId === overId);
       if (overPlanned) { addCourseToSemester(course, overPlanned.semesterId); return; }
-      const sem = semesters.find((s) => s.id === overId);
-      if (sem) addCourseToSemester(course, sem.id);
       return;
     }
 
+    // ── Planned card moved ──
     if (activeData.type === "planned") {
       const activeInstanceId = String(active.id);
       const activeCourse = activeData.course as PlannedCourse;
       const fromSemId = activeCourse.semesterId;
-      const overCourse = plannedCourses.find((c) => c.instanceId === overId);
-      if (overCourse && overCourse.semesterId === fromSemId && overId !== activeInstanceId) {
-        moveCourse(activeInstanceId, fromSemId, overId); return;
-      }
+
+      // Dropped on a semester column
       const toSem = semesters.find((s) => s.id === overId);
-      if (toSem && toSem.id !== fromSemId) moveCourse(activeInstanceId, toSem.id);
+      if (toSem) {
+        if (toSem.id !== fromSemId) moveCourse(activeInstanceId, toSem.id);
+        return;
+      }
+
+      // Dropped on another planned card
+      const overCourse = plannedCourses.find((c) => c.instanceId === overId);
+      if (overCourse) {
+        if (overCourse.semesterId !== fromSemId) {
+          // Move to different semester
+          moveCourse(activeInstanceId, overCourse.semesterId, overId);
+        } else {
+          // Reorder within same semester
+          moveCourse(activeInstanceId, fromSemId, overId);
+        }
+      }
     }
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners}
-      onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={rectIntersection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <div className="flex flex-col h-screen overflow-hidden bg-bg text-fg">
 
         {/* ── Top Nav ── */}
         <header className="shrink-0 h-14 border-b border-card-border bg-card-bg flex items-center px-4 gap-3 z-20 shadow-card">
-          {/* Logo */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center shadow-glow">
-              <GraduationCap className="h-4.5 w-4.5 text-white" />
+            <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center">
+              <GraduationCap className="h-4 w-4 text-white" />
             </div>
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-fg leading-none">Semester Planner</p>
@@ -130,12 +136,12 @@ export default function Home() {
           <div className="flex items-center gap-1.5 bg-secondary rounded-xl px-3 py-1.5 border border-card-border">
             <span className="text-[11px] text-muted-fg font-medium hidden sm:block">Semesters</span>
             <button disabled={numSemesters <= 4} onClick={() => setNumSemesters(numSemesters - 1)}
-              className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25 transition-all">
+              className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25">
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
             <span className="text-sm font-bold text-fg w-4 text-center">{numSemesters}</span>
             <button disabled={numSemesters >= 6} onClick={() => setNumSemesters(numSemesters + 1)}
-              className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25 transition-all">
+              className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25">
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -147,13 +153,12 @@ export default function Home() {
           </div>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {/* Dark mode toggle */}
             <button onClick={toggleDark}
-              className="h-8 w-8 rounded-xl flex items-center justify-center border border-card-border bg-card-bg text-muted-fg hover:text-fg hover:border-primary/30 transition-all shadow-card">
+              className="h-8 w-8 rounded-xl flex items-center justify-center border border-card-border bg-card-bg text-muted-fg hover:text-fg hover:border-primary/30 shadow-card">
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <button onClick={resetPlan}
-              className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium text-muted-fg hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all border border-transparent hover:border-destructive/20">
+              className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium text-muted-fg hover:text-destructive hover:bg-destructive/10 rounded-xl border border-transparent hover:border-destructive/20">
               <RotateCcw className="h-3.5 w-3.5" /> Reset
             </button>
           </div>
@@ -163,11 +168,11 @@ export default function Home() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* LEFT SIDEBAR */}
-          <aside className={`shrink-0 border-r border-card-border bg-card-bg flex flex-col transition-all duration-200 z-10 ${leftOpen ? "w-64" : "w-12"}`}>
+          <aside className={`shrink-0 border-r border-card-border bg-card-bg flex flex-col z-10 ${leftOpen ? "w-64" : "w-12"}`}>
             <div className="flex items-center px-3 py-2 border-b border-card-border h-10">
               {leftOpen && <span className="text-[10px] font-bold text-muted-fg uppercase tracking-widest">Filters</span>}
               <button onClick={() => setLeftOpen(!leftOpen)}
-                className="ml-auto p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-fg hover:text-fg">
+                className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg">
                 {leftOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </button>
             </div>
@@ -194,7 +199,12 @@ export default function Home() {
                   const semCredits = creditsBySemester.find((s) => s.id === sem.id)?.credits ?? 0;
                   return (
                     <div key={sem.id} className="flex-1 min-w-[210px] flex flex-col">
-                      <SemesterColumn semesterId={sem.id} label={sem.label} courseIds={sem.courseIds} credits={semCredits} />
+                      <SemesterColumn
+                        semesterId={sem.id}
+                        label={sem.label}
+                        courseIds={sem.courseIds}
+                        credits={semCredits}
+                      />
                     </div>
                   );
                 })}
@@ -203,29 +213,29 @@ export default function Home() {
           </div>
 
           {/* RIGHT PANEL */}
-          <aside className={`shrink-0 border-l border-card-border bg-card-bg flex flex-col transition-all duration-200 ${rightOpen ? "w-72" : "w-12"}`}>
+          <aside className={`shrink-0 border-l border-card-border bg-card-bg flex flex-col ${rightOpen ? "w-72" : "w-12"}`}>
             <div className="flex items-center h-10 px-2 border-b border-card-border gap-1">
               {rightOpen ? (
                 <>
-                  {[
+                  {([
                     { id: "dashboard" as RightPanel, icon: <LayoutDashboard className="h-3.5 w-3.5" />, label: "Stats" },
                     { id: "validation" as RightPanel, icon: <ShieldCheck className="h-3.5 w-3.5" />, label: "Validate" },
-                  ].map(({ id, icon, label }) => (
+                  ] as const).map(({ id, icon, label }) => (
                     <button key={id} onClick={() => setRightPanel(id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${
                         rightPanel === id ? "bg-primary/10 text-primary" : "text-muted-fg hover:bg-secondary hover:text-fg"
                       }`}>
                       {icon}{label}
                     </button>
                   ))}
                   <button onClick={() => setRightOpen(false)}
-                    className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg transition-colors">
+                    className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg">
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </>
               ) : (
                 <button onClick={() => setRightOpen(true)}
-                  className="mx-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg transition-colors">
+                  className="mx-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
               )}
@@ -244,9 +254,9 @@ export default function Home() {
       </div>
 
       {/* Drag Overlay */}
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeItem && (
-          <div className="bg-card-bg border-2 border-primary/40 rounded-2xl shadow-2xl p-3 w-52 rotate-2 backdrop-blur-sm">
+          <div className="bg-card-bg border-2 border-primary/50 rounded-2xl shadow-2xl p-3 w-52 rotate-1 pointer-events-none">
             <p className="text-xs font-bold text-fg line-clamp-2">{activeItem.course.name}</p>
             <p className="text-[10px] text-muted-fg mt-0.5 font-mono">{activeItem.course.code}</p>
             {activeItem.course.credits != null && (
