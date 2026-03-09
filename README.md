@@ -2,9 +2,8 @@
 
 A small, quickly thrown-together UI to get a better overview of the elective courses available in the TUM Informatics Master's programme. Drag courses into semesters, track your ECTS, and check degree requirements at a glance.
 
-Built mainly for my own use — but maybe it's useful for others too.
 
-**→ [Open the app](https://your-vercel-url.vercel.app)**
+**→ [Open the app](https://novaro-build.com/)**
 
 ---
 
