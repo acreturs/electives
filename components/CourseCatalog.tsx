@@ -9,30 +9,38 @@ import { usePlanStore } from "@/lib/store";
 import { Course } from "@/types";
 
 const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  "Algorithmen (ALG)":                                           { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-400" },
-  "Computergrafik und -vision (CGV)":                            { bg: "bg-pink-500/10",   text: "text-pink-400",   dot: "bg-pink-400" },
-  "Datenbanken und Informationssysteme (DBI)":                   { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-400" },
-  "Digitale Biologie und Digitale Medizin (DBM)":                { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-400" },
-  "Engineering software-intensiver Systeme (SE)":                { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-400" },
-  "Formale Methoden und ihre Anwendungen (FMA)":                 { bg: "bg-indigo-500/10", text: "text-indigo-400", dot: "bg-indigo-400" },
-  "Maschinelles Lernen und Datenanalyse (MLA)":                  { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400" },
-  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)":{ bg: "bg-cyan-500/10",   text: "text-cyan-400",   dot: "bg-cyan-400" },
-  "Robotik (ROB)":                                               { bg: "bg-teal-500/10",   text: "text-teal-400",   dot: "bg-teal-400" },
-  "Sicherheit und Datenschutz (SP)":                             { bg: "bg-red-500/10",    text: "text-red-400",    dot: "bg-red-400" },
+  "Algorithmen (ALG)":                                            { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-400" },
+  "Computergrafik und -vision (CGV)":                             { bg: "bg-pink-500/10",   text: "text-pink-400",   dot: "bg-pink-400" },
+  "Datenbanken und Informationssysteme (DBI)":                    { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-400" },
+  "Digitale Biologie und Digitale Medizin (DBM)":                 { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-400" },
+  "Engineering software-intensiver Systeme (SE)":                 { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-400" },
+  "Formale Methoden und ihre Anwendungen (FMA)":                  { bg: "bg-indigo-500/10", text: "text-indigo-400", dot: "bg-indigo-400" },
+  "Maschinelles Lernen und Datenanalyse (MLA)":                   { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400" },
+  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)": { bg: "bg-cyan-500/10",   text: "text-cyan-400",   dot: "bg-cyan-400" },
+  "Robotik (ROB)":                                                { bg: "bg-teal-500/10",   text: "text-teal-400",   dot: "bg-teal-400" },
+  "Sicherheit und Datenschutz (SP)":                              { bg: "bg-red-500/10",    text: "text-red-400",    dot: "bg-red-400" },
   "Wissenschaftliches Rechnen und High Performance Computing (HPC)": { bg: "bg-lime-500/10", text: "text-lime-400", dot: "bg-lime-400" },
 };
 
 function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 3); }
 
 function termLabel(t: string | null) {
-  if (!t || t === "Vorheriges_WS" || t === "Vorheriges_SS") return null;
-  return t === "Wintersemester" ? "WS" : "SS";
+  if (!t) return null;
+  if (t === "Wintersemester") return "WS";
+  if (t === "Sommersemester") return "SS";
+  if (t === "Vorheriges_WS") return "Prev. WS";
+  if (t === "Vorheriges_SS") return "Prev. SS";
+  return null;
 }
 
 function DraggableCatalogCard({ course }: { course: Course }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `catalog-${course.code}`, data: { course, type: "catalog" } });
-  const style = { transform: CSS.Translate.toString(transform) };
+
+  // Remove from flow while dragging — no gap left behind
+  if (isDragging) return null;
+
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
   const area = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
   const term = termLabel(course.vorlesungTerm);
@@ -41,10 +49,13 @@ function DraggableCatalogCard({ course }: { course: Course }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative bg-card-bg border border-card-border rounded-2xl p-3 transition-all duration-150 hover:border-primary/40 hover:shadow-card-hover ${isDragging ? "opacity-40 scale-[1.02] shadow-xl rotate-1" : "shadow-card"}`}
+      className="group relative bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-default"
     >
-      <div {...listeners} {...attributes}
-        className="absolute left-2 top-3.5 cursor-grab active:cursor-grabbing text-muted-fg opacity-0 group-hover:opacity-40 transition-opacity">
+      <div
+        {...listeners}
+        {...attributes}
+        className="absolute left-2 top-3.5 cursor-grab active:cursor-grabbing text-muted-fg opacity-0 group-hover:opacity-40"
+      >
         <GripVertical className="h-4 w-4" />
       </div>
 
@@ -55,9 +66,13 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             <p className="text-[11px] text-muted-fg mt-0.5 font-mono">{course.code}</p>
           </div>
           {course.vorlesungLink && (
-            <a href={course.vorlesungLink} target="_blank" rel="noopener noreferrer"
+            <a
+              href={course.vorlesungLink}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 p-1.5 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors">
+              className="shrink-0 p-1.5 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10"
+            >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
@@ -70,7 +85,9 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </span>
           )}
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-            isTheory ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-green-500/10 text-green-400 border-green-500/20"
+            isTheory
+              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+              : "bg-green-500/10 text-green-400 border-green-500/20"
           }`}>
             {isTheory ? <BookOpen className="h-2.5 w-2.5" /> : <FlaskConical className="h-2.5 w-2.5" />}
             {isTheory ? "Theory" : "Practical"}
@@ -98,9 +115,9 @@ export function CourseCatalog() {
 
   const filtered = useMemo(() => {
     return ALL_COURSES.filter((c) => {
-      // Hide courses already placed in any semester
       if (plannedCodes.has(c.code)) return false;
-      if (filters.search &&
+      if (
+        filters.search &&
         !c.name.toLowerCase().includes(filters.search.toLowerCase()) &&
         !c.code.toLowerCase().includes(filters.search.toLowerCase())
       ) return false;

@@ -36,7 +36,7 @@ function SortableCourseCard({ course }: { course: PlannedCourse }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative bg-card-bg border border-card-border rounded-xl p-2.5 transition-all duration-150 hover:border-primary/40 hover:shadow-card-hover ${isDragging ? "opacity-30 shadow-xl" : "shadow-card"}`}
+      className={`group relative bg-card-bg border border-card-border rounded-xl p-2.5 hover:border-primary/40 hover:shadow-card-hover ${isDragging ? "opacity-30 shadow-xl" : "shadow-card"}`}
     >
       <div {...listeners} {...attributes}
         className="absolute left-1.5 top-3 cursor-grab active:cursor-grabbing text-muted-fg opacity-0 group-hover:opacity-40 transition-opacity">
