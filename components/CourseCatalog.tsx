@@ -111,29 +111,38 @@ function DraggableCatalogCard({ course }: { course: Course }) {
 
 export function CourseCatalog() {
   const { filters, plannedCourses } = usePlanStore();
-  const plannedCodes = useMemo(() => new Set(plannedCourses.map((c) => c.code)), [plannedCourses]);
+  // Use instanceId-based set so duplicate codes don't accidentally hide unplanned twins
+  const plannedInstanceIds = useMemo(
+    () => new Set(plannedCourses.map((c) => c.id)),
+    [plannedCourses]
+  );
 
   const filtered = useMemo(() => {
-    return ALL_COURSES.filter((c) => {
-      if (plannedCodes.has(c.code)) return false;
-      if (
-        filters.search &&
-        !c.name.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !c.code.toLowerCase().includes(filters.search.toLowerCase())
-      ) return false;
-      if (filters.schwerpunkt.length > 0 && !filters.schwerpunkt.includes(c.schwerpunkt)) return false;
-      if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
-      if (filters.term.length > 0) {
-        const matchesTerm = filters.term.some((t) => {
-          if (t === "unassigned") return !c.vorlesungTerm;
-          return c.vorlesungTerm === t;
-        });
-        if (!matchesTerm) return false;
-      }
-      if (filters.credits !== null && (c.credits == null || c.credits < filters.credits)) return false;
-      return true;
-    });
-  }, [filters, plannedCodes]);
+    const search = filters.search.toLowerCase();
+    return ALL_COURSES
+      .filter((c) => {
+        // Hide already-planned entries (match on id, not code, to handle rare duplicate codes)
+        if (plannedInstanceIds.has(c.id)) return false;
+        // Search
+        if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
+        // Focus area (OR — course must match at least one selected area)
+        if (filters.schwerpunkt.length > 0 && !filters.schwerpunkt.includes(c.schwerpunkt)) return false;
+        // Module type (OR)
+        if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
+        // Term (OR)
+        if (filters.term.length > 0) {
+          const ok = filters.term.some((t) =>
+            t === "unassigned" ? !c.vorlesungTerm : c.vorlesungTerm === t
+          );
+          if (!ok) return false;
+        }
+        // Min credits
+        if (filters.credits !== null && (c.credits == null || c.credits < filters.credits)) return false;
+        return true;
+      })
+      // Sort alphabetically by name so the list isn't dominated by any one area
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [filters, plannedInstanceIds]);
 
   return (
     <div className="flex flex-col h-full">
