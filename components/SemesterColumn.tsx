@@ -2,50 +2,50 @@
 
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { X, ExternalLink, BookOpen, FlaskConical } from "lucide-react";
 import { PlannedCourse } from "@/types";
 import { usePlanStore } from "@/lib/store";
 
 const AREA_COLORS: Record<string, { bg: string; text: string }> = {
-  "Algorithmen (ALG)":                                            { bg: "bg-violet-500/10", text: "text-violet-400" },
-  "Computergrafik und -vision (CGV)":                             { bg: "bg-pink-500/10",   text: "text-pink-400" },
-  "Datenbanken und Informationssysteme (DBI)":                    { bg: "bg-amber-500/10",  text: "text-amber-400" },
-  "Digitale Biologie und Digitale Medizin (DBM)":                 { bg: "bg-emerald-500/10",text: "text-emerald-400" },
-  "Engineering software-intensiver Systeme (SE)":                 { bg: "bg-sky-500/10",    text: "text-sky-400" },
-  "Formale Methoden und ihre Anwendungen (FMA)":                  { bg: "bg-indigo-500/10", text: "text-indigo-400" },
-  "Maschinelles Lernen und Datenanalyse (MLA)":                   { bg: "bg-orange-500/10", text: "text-orange-400" },
-  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)": { bg: "bg-cyan-500/10",   text: "text-cyan-400" },
-  "Robotik (ROB)":                                                { bg: "bg-teal-500/10",   text: "text-teal-400" },
-  "Sicherheit und Datenschutz (SP)":                              { bg: "bg-red-500/10",    text: "text-red-400" },
-  "Wissenschaftliches Rechnen und High Performance Computing (HPC)": { bg: "bg-lime-500/10", text: "text-lime-400" },
+  "Algorithmen (ALG)":                                               { bg: "bg-violet-500/10", text: "text-violet-400" },
+  "Computergrafik und -vision (CGV)":                                { bg: "bg-pink-500/10",   text: "text-pink-400"   },
+  "Datenbanken und Informationssysteme (DBI)":                       { bg: "bg-amber-500/10",  text: "text-amber-400"  },
+  "Digitale Biologie und Digitale Medizin (DBM)":                    { bg: "bg-emerald-500/10",text: "text-emerald-400"},
+  "Engineering software-intensiver Systeme (SE)":                    { bg: "bg-sky-500/10",    text: "text-sky-400"    },
+  "Formale Methoden und ihre Anwendungen (FMA)":                     { bg: "bg-indigo-500/10", text: "text-indigo-400" },
+  "Maschinelles Lernen und Datenanalyse (MLA)":                      { bg: "bg-orange-500/10", text: "text-orange-400" },
+  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)":    { bg: "bg-cyan-500/10",   text: "text-cyan-400"   },
+  "Robotik (ROB)":                                                   { bg: "bg-teal-500/10",   text: "text-teal-400"   },
+  "Sicherheit und Datenschutz (SP)":                                 { bg: "bg-red-500/10",    text: "text-red-400"    },
+  "Wissenschaftliches Rechnen und High Performance Computing (HPC)": { bg: "bg-lime-500/10",   text: "text-lime-400"   },
 };
 
 function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 3); }
 
-function SortableCourseCard({ course }: { course: PlannedCourse }) {
+// ── Planned card — draggable so it can be moved to another semester ────────
+function PlannedCard({ course }: { course: PlannedCourse }) {
   const { removeCourseFromSemester } = usePlanStore();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: course.instanceId,
     data: { course, type: "planned" },
   });
 
-  const area = AREA_COLORS[course.schwerpunkt];
+  const area     = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
 
   return (
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        // Invisible while dragging — DragOverlay shows the ghost
-        opacity: isDragging ? 0 : 1,
+        transform:   CSS.Translate.toString(transform),
+        opacity:     isDragging ? 0.45 : 1,
+        zIndex:      isDragging ? 999  : "auto",
+        position:    "relative",
         touchAction: "none",
       }}
-      className="group relative bg-card-bg border border-card-border rounded-xl p-2.5 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
-      // Whole card is draggable
+      className="group bg-card-bg border border-card-border rounded-xl p-2.5 shadow-card hover:border-primary/40 cursor-grab active:cursor-grabbing select-none"
       {...listeners}
       {...attributes}
     >
@@ -101,25 +101,26 @@ function SortableCourseCard({ course }: { course: PlannedCourse }) {
   );
 }
 
+// ── Semester column — pure useDroppable, no SortableContext ───────────────
 interface SemesterColumnProps {
   semesterId: string;
-  label: string;
-  courseIds: string[];
-  credits: number;
+  label:      string;
+  courseIds:  string[];
+  credits:    number;
 }
 
 export function SemesterColumn({ semesterId, label, courseIds, credits }: SemesterColumnProps) {
   const { plannedCourses } = usePlanStore();
   const { isOver, setNodeRef } = useDroppable({ id: semesterId });
+
   const courses = courseIds
     .map((id) => plannedCourses.find((c) => c.instanceId === id))
     .filter(Boolean) as PlannedCourse[];
-  const isEmpty = courses.length === 0;
 
   return (
-    <div className="flex flex-col min-w-[210px] w-full">
+    <div className="flex flex-col w-full">
       {/* Header */}
-      <div className="rounded-t-2xl px-3.5 py-2.5 border border-b-0 border-card-border bg-card-bg">
+      <div className="rounded-t-2xl px-3.5 py-2.5 border border-b-0 border-card-border bg-card-bg shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm text-fg">{label}</h3>
           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
@@ -133,30 +134,28 @@ export function SemesterColumn({ semesterId, label, courseIds, credits }: Semest
         </p>
       </div>
 
-      {/* Drop zone */}
-      <SortableContext items={courseIds} strategy={verticalListSortingStrategy}>
-        <div
-          ref={setNodeRef}
-          className={`flex-1 min-h-[180px] rounded-b-2xl border p-2 space-y-1.5 transition-colors duration-150 ${
-            isOver
-              ? "bg-primary/5 border-primary/50"
-              : isEmpty
-                ? "border-card-border border-dashed bg-secondary/30"
-                : "border-card-border bg-secondary/20"
-          }`}
-        >
-          {courses.map((course) => (
-            <SortableCourseCard key={course.instanceId} course={course} />
-          ))}
-          {isEmpty && (
-            <div className={`flex items-center justify-center h-20 rounded-xl text-[11px] transition-colors ${
-              isOver ? "text-primary" : "text-muted-fg"
-            }`}>
-              {isOver ? "Release to drop" : "Drop courses here"}
-            </div>
-          )}
-        </div>
-      </SortableContext>
+      {/* Drop zone — setNodeRef HERE so the entire zone is droppable */}
+      <div
+        ref={setNodeRef}
+        className={`flex-1 min-h-[200px] rounded-b-2xl border p-2 space-y-1.5 transition-colors duration-100 ${
+          isOver
+            ? "bg-primary/8 border-primary/60 border-2"
+            : courses.length === 0
+              ? "border-dashed border-card-border bg-secondary/20"
+              : "border-card-border bg-secondary/20"
+        }`}
+      >
+        {courses.map((course) => (
+          <PlannedCard key={course.instanceId} course={course} />
+        ))}
+        {courses.length === 0 && (
+          <div className={`flex items-center justify-center h-24 rounded-xl text-[11px] transition-colors ${
+            isOver ? "text-primary font-medium" : "text-muted-fg"
+          }`}>
+            {isOver ? "↓ Drop here" : "Drag courses here"}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

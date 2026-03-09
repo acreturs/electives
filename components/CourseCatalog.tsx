@@ -2,23 +2,24 @@
 
 import React, { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
 import { ALL_COURSES } from "@/lib/data";
 import { usePlanStore } from "@/lib/store";
 import { Course } from "@/types";
 
 const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  "Algorithmen (ALG)":                                            { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-400" },
-  "Computergrafik und -vision (CGV)":                             { bg: "bg-pink-500/10",   text: "text-pink-400",   dot: "bg-pink-400" },
-  "Datenbanken und Informationssysteme (DBI)":                    { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-400" },
-  "Digitale Biologie und Digitale Medizin (DBM)":                 { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-400" },
-  "Engineering software-intensiver Systeme (SE)":                 { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-400" },
-  "Formale Methoden und ihre Anwendungen (FMA)":                  { bg: "bg-indigo-500/10", text: "text-indigo-400", dot: "bg-indigo-400" },
-  "Maschinelles Lernen und Datenanalyse (MLA)":                   { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400" },
-  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)": { bg: "bg-cyan-500/10",   text: "text-cyan-400",   dot: "bg-cyan-400" },
-  "Robotik (ROB)":                                                { bg: "bg-teal-500/10",   text: "text-teal-400",   dot: "bg-teal-400" },
-  "Sicherheit und Datenschutz (SP)":                              { bg: "bg-red-500/10",    text: "text-red-400",    dot: "bg-red-400" },
-  "Wissenschaftliches Rechnen und High Performance Computing (HPC)": { bg: "bg-lime-500/10", text: "text-lime-400", dot: "bg-lime-400" },
+  "Algorithmen (ALG)":                                               { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-400" },
+  "Computergrafik und -vision (CGV)":                                { bg: "bg-pink-500/10",   text: "text-pink-400",   dot: "bg-pink-400"   },
+  "Datenbanken und Informationssysteme (DBI)":                       { bg: "bg-amber-500/10",  text: "text-amber-400",  dot: "bg-amber-400"  },
+  "Digitale Biologie und Digitale Medizin (DBM)":                    { bg: "bg-emerald-500/10",text: "text-emerald-400",dot: "bg-emerald-400"},
+  "Engineering software-intensiver Systeme (SE)":                    { bg: "bg-sky-500/10",    text: "text-sky-400",    dot: "bg-sky-400"    },
+  "Formale Methoden und ihre Anwendungen (FMA)":                     { bg: "bg-indigo-500/10", text: "text-indigo-400", dot: "bg-indigo-400" },
+  "Maschinelles Lernen und Datenanalyse (MLA)":                      { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400" },
+  "Rechnerarchitektur, Rechnernetze und Verteilte Systeme (RRV)":    { bg: "bg-cyan-500/10",   text: "text-cyan-400",   dot: "bg-cyan-400"   },
+  "Robotik (ROB)":                                                   { bg: "bg-teal-500/10",   text: "text-teal-400",   dot: "bg-teal-400"   },
+  "Sicherheit und Datenschutz (SP)":                                 { bg: "bg-red-500/10",    text: "text-red-400",    dot: "bg-red-400"    },
+  "Wissenschaftliches Rechnen und High Performance Computing (HPC)": { bg: "bg-lime-500/10",   text: "text-lime-400",   dot: "bg-lime-400"   },
 };
 
 function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 3); }
@@ -26,28 +27,32 @@ function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 
 function termLabel(t: string | null) {
   if (t === "Wintersemester") return "WS";
   if (t === "Sommersemester") return "SS";
-  if (t === "Vorheriges_WS") return "Prev. WS";
-  if (t === "Vorheriges_SS") return "Prev. SS";
+  if (t === "Vorheriges_WS")  return "Prev. WS";
+  if (t === "Vorheriges_SS")  return "Prev. SS";
   return null;
 }
 
 function DraggableCatalogCard({ course }: { course: Course }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `catalog-${course.id}`,
     data: { course, type: "catalog" },
   });
 
-  const area = AREA_COLORS[course.schwerpunkt];
+  const area    = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
-  const term = termLabel(course.vorlesungTerm);
+  const term    = termLabel(course.vorlesungTerm);
 
   return (
     <div
       ref={setNodeRef}
-      // Keep in DOM when dragging (opacity 0) so dnd-kit has the correct initial rect for the overlay
-      style={{ opacity: isDragging ? 0 : 1, touchAction: "none" }}
-      className="group relative bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
-      // Listeners on the whole card — entire surface is draggable
+      style={{
+        transform: CSS.Translate.toString(transform),
+        opacity:   isDragging ? 0.45 : 1,
+        zIndex:    isDragging ? 999  : "auto",
+        position:  "relative",
+        touchAction: "none",
+      }}
+      className="group bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
       {...listeners}
       {...attributes}
     >
@@ -62,7 +67,6 @@ function DraggableCatalogCard({ course }: { course: Course }) {
               href={course.vorlesungLink}
               target="_blank"
               rel="noopener noreferrer"
-              // Stop propagation so clicking the link doesn't start a drag
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
               className="shrink-0 p-1.5 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors"
@@ -79,9 +83,8 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </span>
           )}
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-            isTheory
-              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-              : "bg-green-500/10 text-green-400 border-green-500/20"
+            isTheory ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                     : "bg-green-500/10 text-green-400 border-green-500/20"
           }`}>
             {isTheory ? <BookOpen className="h-2.5 w-2.5" /> : <FlaskConical className="h-2.5 w-2.5" />}
             {isTheory ? "Theory" : "Practical"}
@@ -100,7 +103,7 @@ function DraggableCatalogCard({ course }: { course: Course }) {
         </div>
 
         {!course.vorlesungTerm && (
-          <div className="flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/8 border border-amber-500/15 rounded-lg px-2 py-1">
+          <div className="flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1">
             <AlertCircle className="h-3 w-3 shrink-0" />
             Cannot verify if this course is currently offered
           </div>
@@ -112,16 +115,13 @@ function DraggableCatalogCard({ course }: { course: Course }) {
 
 export function CourseCatalog() {
   const { filters, plannedCourses } = usePlanStore();
-  const plannedInstanceIds = useMemo(
-    () => new Set(plannedCourses.map((c) => c.id)),
-    [plannedCourses]
-  );
+  const plannedIds = useMemo(() => new Set(plannedCourses.map((c) => c.id)), [plannedCourses]);
 
   const filtered = useMemo(() => {
     const search = filters.search.toLowerCase();
     return ALL_COURSES
       .filter((c) => {
-        if (plannedInstanceIds.has(c.id)) return false;
+        if (plannedIds.has(c.id)) return false;
         if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
         if (filters.schwerpunkt.length > 0 && !filters.schwerpunkt.includes(c.schwerpunkt)) return false;
         if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
@@ -135,7 +135,7 @@ export function CourseCatalog() {
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [filters, plannedInstanceIds]);
+  }, [filters, plannedIds]);
 
   return (
     <div className="flex flex-col h-full">

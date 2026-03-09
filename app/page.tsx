@@ -1,365 +1,255 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  DndContext, DragEndEvent, DragStartEvent,
-  PointerSensor, useSensor, useSensors, DragOverlay,
-  rectIntersection,
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
-import {
-  GraduationCap, LayoutDashboard, ShieldCheck, BookOpen,
-  RotateCcw, ChevronLeft, ChevronRight, Moon, Sun,
-  SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
-  CalendarDays, BarChart2,
-} from "lucide-react";
+import { Moon, Sun, RotateCcw, BarChart2, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { usePlanStore } from "@/lib/store";
-import { FilterPanel } from "@/components/FilterPanel";
+import { ALL_COURSES }  from "@/lib/data";
+import { FilterPanel }   from "@/components/FilterPanel";
 import { CourseCatalog } from "@/components/CourseCatalog";
 import { SemesterColumn } from "@/components/SemesterColumn";
-import { Dashboard } from "@/components/Dashboard";
+import { Dashboard }      from "@/components/Dashboard";
 import { ValidationPanel } from "@/components/ValidationPanel";
-import { ImportExport } from "@/components/ImportExport";
+import { ImportExport }   from "@/components/ImportExport";
 import { computeCreditsBySemester } from "@/utils";
-import { Course, PlannedCourse } from "@/types";
-
-type RightPanel = "dashboard" | "validation";
-type MobileTab  = "filter" | "plan" | "stats";
-
-// ── Dark mode ──────────────────────────────────────────────────────────────
-function useDarkMode() {
-  const [dark, setDark] = useState(
-    () => typeof window !== "undefined" && document.documentElement.classList.contains("dark")
-  );
-  const toggle = useCallback(() => {
-    const next = !dark;
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-    setDark(next);
-  }, [dark]);
-  return { dark, toggle };
-}
-
-// ── Semester grid (inlined to avoid re-mount on re-render) ─────────────────
-function SemesterGrid({
-  semesters, creditsBySemester, minColW,
-}: {
-  semesters: ReturnType<typeof usePlanStore>["semesters"];
-  creditsBySemester: { id: string; credits: number }[];
-  minColW: number;
-}) {
-  return (
-    <div className="flex gap-3 h-full" style={{ minWidth: semesters.length * (minColW + 12) }}>
-      {semesters.map((sem) => {
-        const credits = creditsBySemester.find((s) => s.id === sem.id)?.credits ?? 0;
-        return (
-          <div key={sem.id} className="flex-1 flex flex-col" style={{ minWidth: minColW }}>
-            <SemesterColumn
-              semesterId={sem.id}
-              label={sem.label}
-              courseIds={sem.courseIds}
-              credits={credits}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function Home() {
   const {
-    semesters, plannedCourses, numSemesters,
-    setNumSemesters, addCourseToSemester, moveCourse, resetPlan,
+    semesters, numSemesters, setNumSemesters,
+    addCourseToSemester, moveCourse, resetPlan,
+    plannedCourses,
   } = usePlanStore();
 
-  const { dark, toggle: toggleDark } = useDarkMode();
-  const [activeItem, setActiveItem] = useState<{ course: Course | PlannedCourse; type: string } | null>(null);
-  const [rightPanel, setRightPanel] = useState<RightPanel>("dashboard");
-  const [leftOpen, setLeftOpen]   = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("plan");
-
-  // ── Single-source layout mode: JS-driven so only ONE set of droppables ──
-  // exists in the DOM at any time (prevents dnd-kit from seeing duplicate IDs)
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < 768);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  /* ── dark mode ─────────────────────────────────────────────────────── */
+  const [dark, setDark] = useState(() =>
+    typeof window !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : false
   );
-
-  const creditsBySemester = computeCreditsBySemester(semesters, plannedCourses);
-  const totalCredits = plannedCourses.reduce((s, c) => s + (c.credits ?? 0), 0);
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveItem(event.active.data.current as { course: Course | PlannedCourse; type: string });
+  function toggleDark() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
   }
 
+  /* ── collapsible sections ────────────────────────────────────────────── */
+  const [openFilter,     setOpenFilter]     = useState(false);
+  const [openCatalog,    setOpenCatalog]    = useState(false);
+  const [openDashboard,  setOpenDashboard]  = useState(false);
+  const [openValidation, setOpenValidation] = useState(false);
+
+  /* ── dnd-kit sensors ────────────────────────────────────────────────── */
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  /* ── drag end ───────────────────────────────────────────────────────── */
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    setActiveItem(null);
     if (!over) return;
 
-    const data   = active.data.current as { course: Course | PlannedCourse; type: string };
-    const overId = String(over.id);
+    const activeId  = String(active.id);
+    const overId    = String(over.id);
+    const activeData = active.data.current as { type: string; course: { id: string; instanceId?: string } };
 
-    if (data.type === "catalog") {
-      const course = data.course as Course;
-      const sem = semesters.find((s) => s.id === overId);
-      if (sem) { addCourseToSemester(course, sem.id); return; }
-      const overPlanned = plannedCourses.find((c) => c.instanceId === overId);
-      if (overPlanned) { addCourseToSemester(course, overPlanned.semesterId); return; }
-    }
+    if (!activeData) return;
 
-    if (data.type === "planned") {
-      const instanceId = String(active.id);
-      const from = (data.course as PlannedCourse).semesterId;
-      const toSem = semesters.find((s) => s.id === overId);
-      if (toSem) {
-        if (toSem.id !== from) moveCourse(instanceId, toSem.id);
-        return;
+    if (activeData.type === "catalog") {
+      // Dragged from catalog into a semester
+      if (overId.startsWith("sem-")) {
+        const course = ALL_COURSES.find((c) => c.id === activeData.course.id);
+        if (course) addCourseToSemester(course, overId);
       }
-      const overCourse = plannedCourses.find((c) => c.instanceId === overId);
-      if (overCourse) {
-        overCourse.semesterId !== from
-          ? moveCourse(instanceId, overCourse.semesterId, overId)
-          : moveCourse(instanceId, from, overId);
-      }
+    } else if (activeData.type === "planned") {
+      // Dragged from one semester to another
+      const targetSem = overId.startsWith("sem-") ? overId : null;
+      if (!targetSem) return;
+      moveCourse(activeId, targetSem);
     }
   }
 
-  // ── Shared header ──────────────────────────────────────────────────────
-  const header = (
-    <header className="shrink-0 h-14 border-b border-card-border bg-card-bg flex items-center px-4 gap-3 z-20 shadow-card">
-      <div className="flex items-center gap-2.5 shrink-0">
-        <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center">
-          <GraduationCap className="h-4 w-4 text-white" />
-        </div>
-        <div className="hidden sm:block">
-          <p className="text-sm font-bold text-fg leading-none">Semester Planner</p>
-          <p className="text-[10px] text-muted-fg">TUM Informatics MSc</p>
-        </div>
-      </div>
+  /* ── credits per semester ───────────────────────────────────────────── */
+  const creditsBySemester = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const c of plannedCourses) {
+      if (c.semesterId) {
+        result[c.semesterId] = (result[c.semesterId] ?? 0) + (c.credits ?? 0);
+      }
+    }
+    return result;
+  }, [plannedCourses]);
 
-      <div className="h-5 w-px bg-card-border mx-1 shrink-0" />
-
-      {/* Semester count */}
-      <div className="flex items-center gap-1.5 bg-secondary rounded-xl px-3 py-1.5 border border-card-border">
-        <span className="text-[11px] text-muted-fg font-medium hidden sm:block">Semesters</span>
-        <button disabled={numSemesters <= 4} onClick={() => setNumSemesters(numSemesters - 1)}
-          className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25">
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-sm font-bold text-fg w-4 text-center">{numSemesters}</span>
-        <button disabled={numSemesters >= 6} onClick={() => setNumSemesters(numSemesters + 1)}
-          className="h-5 w-5 rounded-lg flex items-center justify-center text-muted-fg hover:text-fg hover:bg-card-bg disabled:opacity-25">
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* ECTS total */}
-      <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 rounded-xl px-3 py-1.5">
-        <BookOpen className="h-3.5 w-3.5 text-primary" />
-        <span className="text-xs font-bold text-primary">{totalCredits} ECTS</span>
-      </div>
-
-      <div className="ml-auto flex items-center gap-1.5">
-        <button onClick={toggleDark}
-          className="h-8 w-8 rounded-xl flex items-center justify-center border border-card-border bg-card-bg text-muted-fg hover:text-fg hover:border-primary/30 shadow-card">
-          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </button>
-        <button onClick={resetPlan}
-          className="hidden sm:flex items-center gap-1.5 px-3 h-8 text-xs font-medium text-muted-fg hover:text-destructive hover:bg-destructive/10 rounded-xl border border-transparent hover:border-destructive/20">
-          <RotateCcw className="h-3.5 w-3.5" /> Reset
-        </button>
-      </div>
-    </header>
+  /* ── rendered semesters list (only as many as numSemesters) ─────────── */
+  const visibleSemesters = useMemo(
+    () =>
+      Array.from({ length: numSemesters }, (_, i) => {
+        const id  = `sem-${i + 1}`;
+        const sem = semesters.find((s) => s.id === id) ?? { id, courseIds: [] };
+        return sem;
+      }),
+    [semesters, numSemesters]
   );
 
-  // ── Shared footer ──────────────────────────────────────────────────────
-  const footer = (
-    <footer className="shrink-0 border-t border-card-border bg-card-bg px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 z-10">
-      <p className="text-[11px] text-muted-fg max-w-xl leading-relaxed">
-        <span className="font-semibold text-fg/70">⚠ Data note:</span> Availability is checked against Summer 2026 and Winter 2025/26.
-        If a course wasn&apos;t offered in Summer 2025 or Winter 2024/25, no lecture link is shown.
-        Always verify with the official{" "}
-        <a href="https://campus.tum.de" target="_blank" rel="noopener noreferrer"
-          className="underline underline-offset-2 hover:text-primary transition-colors">
-          TUM course catalogue
-        </a>.
-      </p>
-      <a href="https://github.com/acreturs/electives" target="_blank" rel="noopener noreferrer"
-        className="flex items-center gap-1.5 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap">
-        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
-        </svg>
-        Report an issue
-      </a>
-    </footer>
-  );
-
-  // ── Right panel content ─────────────────────────────────────────────────
-  function RightContent() {
+  /* ── shared section header ──────────────────────────────────────────── */
+  function SectionHeader({
+    label, open, onToggle, extra,
+  }: { label: string; open: boolean; onToggle: () => void; extra?: React.ReactNode }) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 space-y-5">
-        <div className="flex gap-1 border-b border-card-border pb-2">
-          {([
-            { id: "dashboard" as RightPanel, icon: <LayoutDashboard className="h-3.5 w-3.5" />, label: "Stats" },
-            { id: "validation" as RightPanel, icon: <ShieldCheck className="h-3.5 w-3.5" />, label: "Validate" },
-          ] as const).map(({ id, icon, label }) => (
-            <button key={id} onClick={() => setRightPanel(id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${
-                rightPanel === id ? "bg-primary/10 text-primary" : "text-muted-fg hover:bg-secondary hover:text-fg"
-              }`}>
-              {icon}{label}
-            </button>
-          ))}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 bg-card-bg border border-card-border rounded-2xl hover:border-primary/40 transition-colors"
+      >
+        <span className="font-semibold text-sm text-fg">{label}</span>
+        <div className="flex items-center gap-2">
+          {extra}
+          {open ? <ChevronUp className="h-4 w-4 text-muted-fg" /> : <ChevronDown className="h-4 w-4 text-muted-fg" />}
         </div>
-        {rightPanel === "dashboard"  && <Dashboard />}
-        {rightPanel === "validation" && <ValidationPanel />}
-        <div className="border-t border-card-border pt-4">
-          <ImportExport />
-        </div>
-      </div>
+      </button>
     );
   }
 
-  // ── DESKTOP LAYOUT ─────────────────────────────────────────────────────
-  const desktopLayout = (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Left sidebar */}
-      <aside className={`shrink-0 border-r border-card-border bg-card-bg flex flex-col z-10 overflow-hidden transition-none ${leftOpen ? "w-64" : "w-12"}`}>
-        <div className="flex items-center px-3 py-2 border-b border-card-border h-10 shrink-0">
-          {leftOpen && <span className="text-[10px] font-bold text-muted-fg uppercase tracking-widest">Filters</span>}
-          <button onClick={() => setLeftOpen(!leftOpen)}
-            className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg">
-            {leftOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-          </button>
-        </div>
-        {leftOpen && (
-          <div className="flex-1 overflow-y-auto p-3">
-            <FilterPanel />
-          </div>
-        )}
-      </aside>
-
-      {/* Center */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Course catalog — top 44% */}
-        <div className="shrink-0 border-b border-card-border bg-bg overflow-hidden" style={{ height: "44%" }}>
-          <div className="h-full overflow-y-auto p-4">
-            <CourseCatalog />
-          </div>
-        </div>
-        {/* Semester board — remaining */}
-        <div className="flex-1 overflow-auto p-4 bg-secondary/30">
-          <SemesterGrid semesters={semesters} creditsBySemester={creditsBySemester} minColW={210} />
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <aside className={`shrink-0 border-l border-card-border bg-card-bg flex flex-col overflow-hidden transition-none ${rightOpen ? "w-72" : "w-12"}`}>
-        {rightOpen ? (
-          <>
-            <RightContent />
-          </>
-        ) : (
-          <button onClick={() => setRightOpen(true)}
-            className="m-auto p-1.5 rounded-lg hover:bg-secondary text-muted-fg hover:text-fg">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-        )}
-        {rightOpen && (
-          <button onClick={() => setRightOpen(false)}
-            className="shrink-0 w-full flex items-center justify-end px-2 py-1 border-t border-card-border text-muted-fg hover:text-fg hover:bg-secondary transition-colors">
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </aside>
-    </div>
-  );
-
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────
-  const mobileLayout = (
-    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {mobileTab === "filter" && (
-          <div className="h-full overflow-y-auto p-4"><FilterPanel /></div>
-        )}
-        {mobileTab === "plan" && (
-          <div className="flex flex-col h-full">
-            <div className="shrink-0 border-b border-card-border overflow-hidden" style={{ height: "40%" }}>
-              <div className="h-full overflow-y-auto p-3"><CourseCatalog /></div>
-            </div>
-            <div className="flex-1 overflow-auto p-3 bg-secondary/30">
-              <SemesterGrid semesters={semesters} creditsBySemester={creditsBySemester} minColW={180} />
-            </div>
-          </div>
-        )}
-        {mobileTab === "stats" && (
-          <div className="h-full overflow-y-auto p-4 space-y-5">
-            <Dashboard />
-            <div className="border-t border-card-border pt-4"><ValidationPanel /></div>
-            <div className="border-t border-card-border pt-4"><ImportExport /></div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom tab bar */}
-      <nav className="shrink-0 border-t border-card-border bg-card-bg flex items-stretch">
-        {([
-          { id: "filter" as MobileTab, icon: <SlidersHorizontal className="h-5 w-5" />, label: "Filter" },
-          { id: "plan"   as MobileTab, icon: <CalendarDays       className="h-5 w-5" />, label: "Plan"   },
-          { id: "stats"  as MobileTab, icon: <BarChart2           className="h-5 w-5" />, label: "Stats"  },
-        ] as const).map(({ id, icon, label }) => (
-          <button key={id} onClick={() => setMobileTab(id)}
-            className={`flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-[11px] font-medium transition-colors ${
-              mobileTab === id
-                ? "text-primary border-t-2 border-primary -mt-[1px]"
-                : "text-muted-fg hover:text-fg"
-            }`}>
-            {icon}{label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
-
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={rectIntersection}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex flex-col h-screen overflow-hidden bg-bg text-fg">
-        {header}
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <div className="min-h-screen bg-bg text-fg flex flex-col">
+        {/* ── Top bar ──────────────────────────────────────────────────── */}
+        <header className="sticky top-0 z-40 bg-bg/90 backdrop-blur border-b border-card-border px-4 py-3 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-fg leading-none">
+              TUM CS MSc Planner
+            </h1>
+            <p className="text-[11px] text-muted-fg mt-0.5">Informatics · Semester Planning Tool</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ImportExport />
+            <button
+              onClick={() => { if (confirm("Reset your entire plan?")) resetPlan(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border border-card-border text-muted-fg hover:text-red-400 hover:border-red-400/40 transition-colors"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Reset</span>
+            </button>
+            <button
+              onClick={toggleDark}
+              className="p-2 rounded-xl border border-card-border text-muted-fg hover:text-fg hover:border-primary/40 transition-colors"
+            >
+              {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
+        </header>
 
-        {/* Only ONE layout is mounted at a time — prevents duplicate droppable IDs */}
-        {isMobile ? mobileLayout : desktopLayout}
+        {/* ── Main content ─────────────────────────────────────────────── */}
+        <main className="flex-1 flex flex-col gap-4 p-4 max-w-screen-2xl mx-auto w-full">
 
-        {/* Footer — always visible */}
-        {!isMobile && footer}
-      </div>
+          {/* ── Semester count selector ─────────────────────────────── */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium text-fg">Semesters:</span>
+            {[4, 5, 6].map((n) => (
+              <button
+                key={n}
+                onClick={() => setNumSemesters(n)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-semibold border transition-all ${
+                  numSemesters === n
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "bg-card-bg border-card-border text-muted-fg hover:border-primary/40"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
 
-      <DragOverlay dropAnimation={null}>
-        {activeItem && (
-          <div className="bg-card-bg border-2 border-primary/50 rounded-2xl shadow-2xl p-3 w-52 rotate-1 pointer-events-none select-none">
-            <p className="text-xs font-bold text-fg line-clamp-2">{activeItem.course.name}</p>
-            <p className="text-[10px] text-muted-fg mt-0.5 font-mono">{activeItem.course.code}</p>
-            {activeItem.course.credits != null && (
-              <span className="mt-1.5 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary border border-primary/25">
-                {activeItem.course.credits} ECTS
-              </span>
+          {/* ── Semester board ──────────────────────────────────────── */}
+          <div className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${numSemesters}, minmax(0, 1fr))` }}>
+            {visibleSemesters.map((sem, i) => (
+              <SemesterColumn
+                key={sem.id}
+                semesterId={sem.id}
+                label={`Semester ${i + 1}`}
+                courseIds={sem.courseIds}
+                credits={creditsBySemester[sem.id] ?? 0}
+              />
+            ))}
+          </div>
+
+          {/* ── Collapsible catalog ─────────────────────────────────── */}
+          <div>
+            <SectionHeader
+              label="Course Catalog"
+              open={openCatalog}
+              onToggle={() => setOpenCatalog((v) => !v)}
+            />
+            {openCatalog && (
+              <div className="mt-2 bg-card-bg border border-card-border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4" style={{ minHeight: 400 }}>
+                {/* Filters */}
+                <div className="border-r border-card-border pr-4">
+                  <FilterPanel />
+                </div>
+                {/* Course list */}
+                <div style={{ maxHeight: 600, overflowY: "auto" }}>
+                  <CourseCatalog />
+                </div>
+              </div>
             )}
           </div>
-        )}
-      </DragOverlay>
+
+          {/* ── Stats ───────────────────────────────────────────────── */}
+          <div>
+            <SectionHeader
+              label="Statistics"
+              open={openDashboard}
+              onToggle={() => setOpenDashboard((v) => !v)}
+              extra={<BarChart2 className="h-4 w-4 text-muted-fg" />}
+            />
+            {openDashboard && (
+              <div className="mt-2">
+                <Dashboard />
+              </div>
+            )}
+          </div>
+
+          {/* ── Validation ──────────────────────────────────────────── */}
+          <div>
+            <SectionHeader
+              label="Degree Validation"
+              open={openValidation}
+              onToggle={() => setOpenValidation((v) => !v)}
+              extra={<CheckSquare className="h-4 w-4 text-muted-fg" />}
+            />
+            {openValidation && (
+              <div className="mt-2">
+                <ValidationPanel />
+              </div>
+            )}
+          </div>
+
+        </main>
+
+        {/* ── Footer ───────────────────────────────────────────────────── */}
+        <footer className="border-t border-card-border px-4 py-4 text-center space-y-1">
+          <p className="text-[11px] text-muted-fg/60 max-w-2xl mx-auto italic">
+            Note: Availability of lecture links is verified against Summer 2026, Winter 2025, Summer 2025, and Winter 2024 terms.
+            Courses not found in any of these terms show no link — this does not necessarily mean they are discontinued.
+          </p>
+          <p className="text-xs text-muted-fg">
+            Found a bug or want to suggest something?{" "}
+            <a
+              href="https://github.com/acreturs/electives/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-semibold"
+            >
+              Open an issue on GitHub ↗
+            </a>
+          </p>
+        </footer>
+      </div>
     </DndContext>
   );
 }
