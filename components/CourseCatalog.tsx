@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
@@ -23,7 +23,6 @@ const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
 };
 
 function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 3); }
-
 function termLabel(t: string | null) {
   if (t === "Wintersemester") return "WS";
   if (t === "Sommersemester") return "SS";
@@ -37,19 +36,18 @@ function DraggableCatalogCard({ course }: { course: Course }) {
     id: `catalog-${course.id}`,
     data: { course, type: "catalog" },
   });
-
-  const area    = AREA_COLORS[course.schwerpunkt];
+  const area     = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
-  const term    = termLabel(course.vorlesungTerm);
+  const term     = termLabel(course.vorlesungTerm);
 
   return (
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Translate.toString(transform),
-        opacity:   isDragging ? 0.45 : 1,
-        zIndex:    isDragging ? 999  : "auto",
-        position:  "relative",
+        transform:   CSS.Translate.toString(transform),
+        opacity:     isDragging ? 0.45 : 1,
+        zIndex:      isDragging ? 999  : "auto",
+        position:    "relative",
         touchAction: "none",
       }}
       className="group bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
@@ -75,7 +73,6 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </a>
           )}
         </div>
-
         <div className="flex flex-wrap items-center gap-1.5">
           {course.credits != null && (
             <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
@@ -101,7 +98,6 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </span>
           )}
         </div>
-
         {!course.vorlesungTerm && (
           <div className="flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1">
             <AlertCircle className="h-3 w-3 shrink-0" />
@@ -113,29 +109,48 @@ function DraggableCatalogCard({ course }: { course: Course }) {
   );
 }
 
+// Read each filter field via a dedicated selector so the component only
+// re-renders when that specific slice changes — avoids stale-closure bugs.
 export function CourseCatalog() {
-  const { filters, plannedCourses } = usePlanStore();
-  const plannedIds = useMemo(() => new Set(plannedCourses.map((c) => c.id)), [plannedCourses]);
+  const searchFilter      = usePlanStore((s) => s.filters.search);
+  const schwerpunktFilter = usePlanStore((s) => s.filters.schwerpunkt);
+  const typeFilter        = usePlanStore((s) => s.filters.type);
+  const termFilter        = usePlanStore((s) => s.filters.term);
+  const creditsFilter     = usePlanStore((s) => s.filters.credits);
+  const plannedCourses    = usePlanStore((s) => s.plannedCourses);
 
-  const filtered = useMemo(() => {
-    const search = filters.search.toLowerCase();
-    return ALL_COURSES
-      .filter((c) => {
-        if (plannedIds.has(c.id)) return false;
-        if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
-        if (filters.schwerpunkt.length > 0 && !filters.schwerpunkt.includes(c.schwerpunkt)) return false;
-        if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
-        if (filters.term.length > 0) {
-          const ok = filters.term.some((t) =>
-            t === "unassigned" ? !c.vorlesungTerm : c.vorlesungTerm === t
-          );
-          if (!ok) return false;
-        }
-        if (filters.credits !== null && (c.credits == null || c.credits < filters.credits)) return false;
-        return true;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [filters, plannedIds]);
+  const plannedIds = new Set(plannedCourses.map((c) => c.id));
+
+  const search = searchFilter.toLowerCase();
+
+  const filtered = ALL_COURSES
+    .filter((c) => {
+      // already planned — hide from catalog
+      if (plannedIds.has(c.id)) return false;
+
+      // text search
+      if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
+
+      // focus area
+      if (schwerpunktFilter.length > 0 && !schwerpunktFilter.includes(c.schwerpunkt)) return false;
+
+      // type
+      if (typeFilter.length > 0 && !typeFilter.includes(c.type)) return false;
+
+      // semester term
+      if (termFilter.length > 0) {
+        const match = termFilter.some((t) =>
+          t === "unassigned" ? !c.vorlesungTerm : c.vorlesungTerm === t
+        );
+        if (!match) return false;
+      }
+
+      // min credits
+      if (creditsFilter !== null && (c.credits == null || c.credits < creditsFilter)) return false;
+
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="flex flex-col h-full">
