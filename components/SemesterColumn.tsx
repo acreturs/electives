@@ -4,7 +4,7 @@ import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, X, ExternalLink, BookOpen, FlaskConical } from "lucide-react";
+import { X, ExternalLink, BookOpen, FlaskConical } from "lucide-react";
 import { PlannedCourse } from "@/types";
 import { usePlanStore } from "@/lib/store";
 
@@ -26,24 +26,30 @@ function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 
 
 function SortableCourseCard({ course }: { course: PlannedCourse }) {
   const { removeCourseFromSemester } = usePlanStore();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: course.instanceId, data: { course, type: "planned" } });
-  const style = { transform: CSS.Transform.toString(transform), transition };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: course.instanceId,
+    data: { course, type: "planned" },
+  });
+
   const area = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`group relative bg-card-bg border border-card-border rounded-xl p-2.5 hover:border-primary/40 hover:shadow-card-hover ${isDragging ? "opacity-30 shadow-xl" : "shadow-card"}`}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        // Invisible while dragging — DragOverlay shows the ghost
+        opacity: isDragging ? 0 : 1,
+        touchAction: "none",
+      }}
+      className="group relative bg-card-bg border border-card-border rounded-xl p-2.5 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
+      // Whole card is draggable
+      {...listeners}
+      {...attributes}
     >
-      <div {...listeners} {...attributes}
-        className="absolute left-1.5 top-3 cursor-grab active:cursor-grabbing text-muted-fg opacity-0 group-hover:opacity-40 transition-opacity">
-        <GripVertical className="h-3.5 w-3.5" />
-      </div>
-
-      <div className="pl-4 space-y-1.5">
+      <div className="space-y-1.5">
         <div className="flex items-start gap-1.5">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-fg leading-tight line-clamp-2">{course.name}</p>
@@ -51,14 +57,22 @@ function SortableCourseCard({ course }: { course: PlannedCourse }) {
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
             {course.vorlesungLink && (
-              <a href={course.vorlesungLink} target="_blank" rel="noopener noreferrer"
+              <a
+                href={course.vorlesungLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                className="p-1 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors">
+                className="p-1 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors"
+              >
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
-            <button onClick={() => removeCourseFromSemester(course.instanceId)}
-              className="p-1 rounded-lg text-muted-fg hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); removeCourseFromSemester(course.instanceId); }}
+              className="p-1 rounded-lg text-muted-fg hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+            >
               <X className="h-3 w-3" />
             </button>
           </div>
@@ -123,9 +137,9 @@ export function SemesterColumn({ semesterId, label, courseIds, credits }: Semest
       <SortableContext items={courseIds} strategy={verticalListSortingStrategy}>
         <div
           ref={setNodeRef}
-          className={`flex-1 min-h-[180px] rounded-b-2xl border p-2 space-y-1.5 transition-all duration-150 ${
+          className={`flex-1 min-h-[180px] rounded-b-2xl border p-2 space-y-1.5 transition-colors duration-150 ${
             isOver
-              ? "bg-primary/5 border-primary/50 shadow-glow"
+              ? "bg-primary/5 border-primary/50"
               : isEmpty
                 ? "border-card-border border-dashed bg-secondary/30"
                 : "border-card-border bg-secondary/20"

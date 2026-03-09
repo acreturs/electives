@@ -2,8 +2,7 @@
 
 import React, { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
+import { ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
 import { ALL_COURSES } from "@/lib/data";
 import { usePlanStore } from "@/lib/store";
 import { Course } from "@/types";
@@ -25,7 +24,6 @@ const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
 function getShort(s: string) { return s.match(/\(([^)]+)\)/)?.[1] ?? s.slice(0, 3); }
 
 function termLabel(t: string | null) {
-  if (!t) return null;
   if (t === "Wintersemester") return "WS";
   if (t === "Sommersemester") return "SS";
   if (t === "Vorheriges_WS") return "Prev. WS";
@@ -34,13 +32,11 @@ function termLabel(t: string | null) {
 }
 
 function DraggableCatalogCard({ course }: { course: Course }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `catalog-${course.code}`, data: { course, type: "catalog" } });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `catalog-${course.id}`,
+    data: { course, type: "catalog" },
+  });
 
-  // Remove from flow while dragging — no gap left behind
-  if (isDragging) return null;
-
-  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
   const area = AREA_COLORS[course.schwerpunkt];
   const isTheory = course.type === "Theorie";
   const term = termLabel(course.vorlesungTerm);
@@ -48,18 +44,14 @@ function DraggableCatalogCard({ course }: { course: Course }) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className="group relative bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-default"
+      // Keep in DOM when dragging (opacity 0) so dnd-kit has the correct initial rect for the overlay
+      style={{ opacity: isDragging ? 0 : 1, touchAction: "none" }}
+      className="group relative bg-card-bg border border-card-border rounded-2xl p-3 shadow-card hover:border-primary/40 hover:shadow-card-hover cursor-grab active:cursor-grabbing select-none"
+      // Listeners on the whole card — entire surface is draggable
+      {...listeners}
+      {...attributes}
     >
-      <div
-        {...listeners}
-        {...attributes}
-        className="absolute left-2 top-3.5 cursor-grab active:cursor-grabbing text-muted-fg opacity-0 group-hover:opacity-40"
-      >
-        <GripVertical className="h-4 w-4" />
-      </div>
-
-      <div className="pl-5 space-y-2">
+      <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-fg leading-tight line-clamp-2">{course.name}</p>
@@ -70,8 +62,10 @@ function DraggableCatalogCard({ course }: { course: Course }) {
               href={course.vorlesungLink}
               target="_blank"
               rel="noopener noreferrer"
+              // Stop propagation so clicking the link doesn't start a drag
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 p-1.5 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10"
+              className="shrink-0 p-1.5 rounded-lg text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -104,9 +98,9 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </span>
           )}
         </div>
-        {/* Unverifiable availability warning */}
+
         {!course.vorlesungTerm && (
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/8 border border-amber-500/15 rounded-lg px-2 py-1">
+          <div className="flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/8 border border-amber-500/15 rounded-lg px-2 py-1">
             <AlertCircle className="h-3 w-3 shrink-0" />
             Cannot verify if this course is currently offered
           </div>
@@ -118,7 +112,6 @@ function DraggableCatalogCard({ course }: { course: Course }) {
 
 export function CourseCatalog() {
   const { filters, plannedCourses } = usePlanStore();
-  // Use instanceId-based set so duplicate codes don't accidentally hide unplanned twins
   const plannedInstanceIds = useMemo(
     () => new Set(plannedCourses.map((c) => c.id)),
     [plannedCourses]
@@ -128,26 +121,19 @@ export function CourseCatalog() {
     const search = filters.search.toLowerCase();
     return ALL_COURSES
       .filter((c) => {
-        // Hide already-planned entries (match on id, not code, to handle rare duplicate codes)
         if (plannedInstanceIds.has(c.id)) return false;
-        // Search
         if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
-        // Focus area (OR — course must match at least one selected area)
         if (filters.schwerpunkt.length > 0 && !filters.schwerpunkt.includes(c.schwerpunkt)) return false;
-        // Module type (OR)
         if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
-        // Term (OR)
         if (filters.term.length > 0) {
           const ok = filters.term.some((t) =>
             t === "unassigned" ? !c.vorlesungTerm : c.vorlesungTerm === t
           );
           if (!ok) return false;
         }
-        // Min credits
         if (filters.credits !== null && (c.credits == null || c.credits < filters.credits)) return false;
         return true;
       })
-      // Sort alphabetically by name so the list isn't dominated by any one area
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [filters, plannedInstanceIds]);
 
@@ -161,7 +147,7 @@ export function CourseCatalog() {
       </div>
       <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
         {filtered.map((course) => (
-          <DraggableCatalogCard key={course.code} course={course} />
+          <DraggableCatalogCard key={course.id} course={course} />
         ))}
         {filtered.length === 0 && (
           <div className="flex items-center justify-center h-28 text-xs text-muted-fg border-2 border-dashed border-card-border rounded-2xl">

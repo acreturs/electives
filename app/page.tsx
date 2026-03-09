@@ -24,20 +24,6 @@ import { Course, PlannedCourse } from "@/types";
 type RightPanel = "dashboard" | "validation";
 type MobileTab = "filter" | "plan" | "stats";
 
-// ── Custom sensor: ignore pointer events on resize handles ─────────────────
-class ResizeAwarePointerSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: "onPointerDown" as const,
-      handler: ({ nativeEvent }: { nativeEvent: PointerEvent }) => {
-        if (!nativeEvent.isPrimary || nativeEvent.button !== 0) return false;
-        if ((nativeEvent.target as Element)?.closest?.("[data-resize-handle]")) return false;
-        return true;
-      },
-    },
-  ];
-}
-
 // ── Resize hook ────────────────────────────────────────────────────────────
 function useResize(
   initial: number,
@@ -148,7 +134,7 @@ export default function Home() {
   const [catalogHeight, catalogResizeDown] = useResize(280, 100, 650, "v");
 
   const sensors = useSensors(
-    useSensor(ResizeAwarePointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   const creditsBySemester = computeCreditsBySemester(semesters, plannedCourses);
