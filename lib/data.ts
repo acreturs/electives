@@ -2790,8 +2790,10 @@ export const SCHWERPUNKTE = [
 ] as const;
 
 export const TERM_FILTER_OPTIONS = [
-  { value: "Wintersemester", label: "Winter Semester" },
-  { value: "Sommersemester", label: "Summer Semester" },
+  { value: "Wintersemester", label: "Wintersemester" },
+  { value: "Sommersemester", label: "Sommersemester" },
+  { value: "Vorheriges_WS", label: "Vorheriges Wintersemester" },
+  { value: "Vorheriges_SS", label: "Vorheriges Sommersemester" },
   { value: "unassigned", label: "Nicht zuordenbar" },
 ] as const;
 

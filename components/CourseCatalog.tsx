@@ -105,9 +105,7 @@ export function CourseCatalog() {
       if (filters.type.length > 0 && !filters.type.includes(c.type)) return false;
       if (filters.term.length > 0) {
         const matchesTerm = filters.term.some((t) => {
-          if (t === "unassigned") {
-            return !c.vorlesungTerm || c.vorlesungTerm === "Vorheriges_WS" || c.vorlesungTerm === "Vorheriges_SS";
-          }
+          if (t === "unassigned") return !c.vorlesungTerm;
           return c.vorlesungTerm === t;
         });
         if (!matchesTerm) return false;
