@@ -93,10 +93,13 @@ function DraggableCatalogCard({ course }: { course: Course }) {
 }
 
 export function CourseCatalog() {
-  const { filters } = usePlanStore();
+  const { filters, plannedCourses } = usePlanStore();
+  const plannedCodes = useMemo(() => new Set(plannedCourses.map((c) => c.code)), [plannedCourses]);
 
   const filtered = useMemo(() => {
     return ALL_COURSES.filter((c) => {
+      // Hide courses already placed in any semester
+      if (plannedCodes.has(c.code)) return false;
       if (filters.search &&
         !c.name.toLowerCase().includes(filters.search.toLowerCase()) &&
         !c.code.toLowerCase().includes(filters.search.toLowerCase())
@@ -113,7 +116,7 @@ export function CourseCatalog() {
       if (filters.credits !== null && (c.credits == null || c.credits < filters.credits)) return false;
       return true;
     });
-  }, [filters]);
+  }, [filters, plannedCodes]);
 
   return (
     <div className="flex flex-col h-full">
