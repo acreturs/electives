@@ -253,6 +253,21 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── Footer ── */}
+      <footer className="shrink-0 border-t border-card-border bg-card-bg px-5 py-2 flex flex-wrap items-center justify-between gap-2 z-10">
+        <p className="text-[10px] text-muted-fg/60 max-w-xl leading-relaxed">
+          Course availability is checked for Summer 2026 and Winter 2025/26. If a course was not found in either Summer 2025 or Winter 2024/25, no lecture link is provided. Availability may vary — always verify with the official TUM course catalogue.
+        </p>
+        <a
+          href="https://github.com/acreturs/electives"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-muted-fg/60 hover:text-primary transition-colors whitespace-nowrap"
+        >
+          Report an issue on GitHub ↗
+        </a>
+      </footer>
+
       {/* Drag Overlay */}
       <DragOverlay dropAnimation={null}>
         {activeItem && (
