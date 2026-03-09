@@ -131,6 +131,8 @@ export function CourseCatalog() {
   const filtered = ALL_COURSES
     .filter((c) => {
       if (plannedIds.has(c.id)) return false;
+      // Exclude administrative placeholder entries ("Anerkennung …")
+      if (c.name.toLowerCase().startsWith("anerkennung")) return false;
       if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
       if (fSchwerpunkt.length > 0 && !fSchwerpunkt.includes(c.schwerpunkt)) return false;
       if (fType.length > 0 && !fType.includes(c.type)) return false;
