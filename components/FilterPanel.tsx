@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 import { usePlanStore } from "@/lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { SCHWERPUNKTE, TERM_FILTER_OPTIONS } from "@/lib/data";
 
 const CREDIT_OPTIONS = [3, 4, 5, 6, 8, 10];
@@ -11,14 +12,8 @@ function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
-function Section({
-  title,
-  children,
-  defaultOpen = true,
-}: {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
+function Section({ title, children, defaultOpen = true }: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -31,24 +26,15 @@ function Section({
         {title}
         {open
           ? <ChevronUp className="h-3.5 w-3.5 opacity-50" />
-          : <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-        }
+          : <ChevronDown className="h-3.5 w-3.5 opacity-50" />}
       </button>
       {open && <div className="px-3 pb-3 pt-0.5">{children}</div>}
     </div>
   );
 }
 
-function Chip({
-  label,
-  active,
-  onClick,
-  dot,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  dot?: string;
+function Chip({ label, active, onClick, dot }: {
+  label: string; active: boolean; onClick: () => void; dot?: string;
 }) {
   return (
     <button
@@ -61,12 +47,7 @@ function Chip({
           : "text-muted-fg hover:bg-secondary hover:text-fg"
       )}
     >
-      {dot && (
-        <span
-          className="h-2 w-2 rounded-full shrink-0 opacity-80"
-          style={{ background: dot }}
-        />
-      )}
+      {dot && <span className="h-2 w-2 rounded-full shrink-0 opacity-80" style={{ background: dot }} />}
       <span className="flex-1 leading-snug">{label}</span>
       {active && (
         <span className="ml-auto h-3.5 w-3.5 rounded-full bg-primary flex items-center justify-center">
@@ -94,15 +75,14 @@ const AREA_DOTS: Record<string, string> = {
 };
 
 export function FilterPanel() {
-  const { filters, setFilters } = usePlanStore();
-
-  function toggle(key: "schwerpunkt" | "type" | "term", value: string) {
-    const current = (filters[key] as string[]) ?? [];
-    const next = current.includes(value)
-      ? current.filter((v) => v !== value)
-      : [...current, value];
-    setFilters({ [key]: next });
-  }
+  // useShallow so this component re-renders only when filter values actually change
+  const { filters, setFilters, toggleFilter } = usePlanStore(
+    useShallow((s) => ({
+      filters:      s.filters,
+      setFilters:   s.setFilters,
+      toggleFilter: s.toggleFilter,
+    }))
+  );
 
   const hasActive =
     !!filters.search ||
@@ -122,9 +102,7 @@ export function FilterPanel() {
         {hasActive && (
           <button
             type="button"
-            onClick={() =>
-              setFilters({ search: "", schwerpunkt: [], type: [], term: [], credits: null })
-            }
+            onClick={() => setFilters({ search: "", schwerpunkt: [], type: [], term: [], credits: null })}
             className="flex items-center gap-1 text-[10px] text-destructive/80 hover:text-destructive transition-colors"
           >
             <X className="h-3 w-3" /> Reset
@@ -164,7 +142,7 @@ export function FilterPanel() {
                 key={s}
                 label={`${label} (${short})`}
                 active={filters.schwerpunkt.includes(s)}
-                onClick={() => toggle("schwerpunkt", s)}
+                onClick={() => toggleFilter("schwerpunkt", s)}
                 dot={AREA_DOTS[s]}
               />
             );
@@ -182,7 +160,7 @@ export function FilterPanel() {
             <button
               key={value}
               type="button"
-              onClick={() => toggle("type", value)}
+              onClick={() => toggleFilter("type", value)}
               className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all duration-100 ${
                 filters.type.includes(value)
                   ? "bg-primary text-primary-fg border-primary shadow-sm"
@@ -203,7 +181,7 @@ export function FilterPanel() {
               key={value}
               label={label}
               active={filters.term.includes(value)}
-              onClick={() => toggle("term", value)}
+              onClick={() => toggleFilter("term", value)}
             />
           ))}
         </div>

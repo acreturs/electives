@@ -19,6 +19,7 @@ interface PlanStore {
   // Filters
   filters: Filters;
   setFilters: (f: Partial<Filters>) => void;
+  toggleFilter: (key: "schwerpunkt" | "type" | "term", value: string) => void;
 
   // Actions
   addCourseToSemester: (course: Course, semesterId: string) => void;
@@ -92,6 +93,15 @@ export const usePlanStore = create<PlanStore>()(
 
       setFilters: (f) =>
         set((state) => ({ filters: { ...state.filters, ...f } })),
+
+      toggleFilter: (key, value) =>
+        set((state) => {
+          const current = state.filters[key] as string[];
+          const next = current.includes(value)
+            ? current.filter((v) => v !== value)
+            : [...current, value];
+          return { filters: { ...state.filters, [key]: next } };
+        }),
 
       addCourseToSemester: (course, semesterId) =>
         set((state) => {

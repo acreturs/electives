@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
 import { ALL_COURSES } from "@/lib/data";
 import { usePlanStore } from "@/lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { Course } from "@/types";
 
 const AREA_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -109,45 +110,37 @@ function DraggableCatalogCard({ course }: { course: Course }) {
   );
 }
 
-// Read each filter field via a dedicated selector so the component only
-// re-renders when that specific slice changes — avoids stale-closure bugs.
 export function CourseCatalog() {
-  const searchFilter      = usePlanStore((s) => s.filters.search);
-  const schwerpunktFilter = usePlanStore((s) => s.filters.schwerpunkt);
-  const typeFilter        = usePlanStore((s) => s.filters.type);
-  const termFilter        = usePlanStore((s) => s.filters.term);
-  const creditsFilter     = usePlanStore((s) => s.filters.credits);
-  const plannedCourses    = usePlanStore((s) => s.plannedCourses);
+  // useShallow combines all subscriptions into one — prevents tearing in
+  // Zustand v5 concurrent rendering when multiple slices are needed.
+  const { fSearch, fSchwerpunkt, fType, fTerm, fCredits, plannedCourses } =
+    usePlanStore(
+      useShallow((s) => ({
+        fSearch:      s.filters.search,
+        fSchwerpunkt: s.filters.schwerpunkt,
+        fType:        s.filters.type,
+        fTerm:        s.filters.term,
+        fCredits:     s.filters.credits,
+        plannedCourses: s.plannedCourses,
+      }))
+    );
 
   const plannedIds = new Set(plannedCourses.map((c) => c.id));
-
-  const search = searchFilter.toLowerCase();
+  const search     = fSearch.toLowerCase();
 
   const filtered = ALL_COURSES
     .filter((c) => {
-      // already planned — hide from catalog
       if (plannedIds.has(c.id)) return false;
-
-      // text search
       if (search && !c.name.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
-
-      // focus area
-      if (schwerpunktFilter.length > 0 && !schwerpunktFilter.includes(c.schwerpunkt)) return false;
-
-      // type
-      if (typeFilter.length > 0 && !typeFilter.includes(c.type)) return false;
-
-      // semester term
-      if (termFilter.length > 0) {
-        const match = termFilter.some((t) =>
+      if (fSchwerpunkt.length > 0 && !fSchwerpunkt.includes(c.schwerpunkt)) return false;
+      if (fType.length > 0 && !fType.includes(c.type)) return false;
+      if (fTerm.length > 0) {
+        const match = fTerm.some((t) =>
           t === "unassigned" ? !c.vorlesungTerm : c.vorlesungTerm === t
         );
         if (!match) return false;
       }
-
-      // min credits
-      if (creditsFilter !== null && (c.credits == null || c.credits < creditsFilter)) return false;
-
+      if (fCredits !== null && (c.credits == null || c.credits < fCredits)) return false;
       return true;
     })
     .sort((a, b) => a.name.localeCompare(b.name));
