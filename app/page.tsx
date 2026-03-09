@@ -195,27 +195,6 @@ export default function Home() {
     }
   }
 
-  // Semester board columns — reused in both desktop and mobile
-  function SemesterBoard({ minColWidth = 210 }: { minColWidth?: number }) {
-    return (
-      <div className="flex gap-3 h-full" style={{ minWidth: `${numSemesters * (minColWidth + 12)}px` }}>
-        {semesters.map((sem) => {
-          const semCredits = creditsBySemester.find((s) => s.id === sem.id)?.credits ?? 0;
-          return (
-            <div key={sem.id} className="flex-1 flex flex-col" style={{ minWidth: minColWidth }}>
-              <SemesterColumn
-                semesterId={sem.id}
-                label={sem.label}
-                courseIds={sem.courseIds}
-                credits={semCredits}
-              />
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <DndContext
       sensors={sensors}
@@ -311,7 +290,16 @@ export default function Home() {
 
             {/* Semester board */}
             <div className="flex-1 overflow-auto p-4 bg-secondary/30">
-              <SemesterBoard />
+              <div className="flex gap-3 h-full" style={{ minWidth: `${numSemesters * 222}px` }}>
+                {semesters.map((sem) => {
+                  const semCredits = creditsBySemester.find((s) => s.id === sem.id)?.credits ?? 0;
+                  return (
+                    <div key={sem.id} className="flex-1 flex flex-col" style={{ minWidth: 210 }}>
+                      <SemesterColumn semesterId={sem.id} label={sem.label} courseIds={sem.courseIds} credits={semCredits} />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -383,7 +371,16 @@ export default function Home() {
                 </div>
                 {/* Semester board (remaining) */}
                 <div className="flex-1 overflow-auto p-3 bg-secondary/30">
-                  <SemesterBoard minColWidth={180} />
+                  <div className="flex gap-3 h-full" style={{ minWidth: `${numSemesters * 192}px` }}>
+                    {semesters.map((sem) => {
+                      const semCredits = creditsBySemester.find((s) => s.id === sem.id)?.credits ?? 0;
+                      return (
+                        <div key={sem.id} className="flex-1 flex flex-col" style={{ minWidth: 180 }}>
+                          <SemesterColumn semesterId={sem.id} label={sem.label} courseIds={sem.courseIds} credits={semCredits} />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}

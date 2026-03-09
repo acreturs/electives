@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, ExternalLink, BookOpen, FlaskConical } from "lucide-react";
+import { GripVertical, ExternalLink, BookOpen, FlaskConical, AlertCircle } from "lucide-react";
 import { ALL_COURSES } from "@/lib/data";
 import { usePlanStore } from "@/lib/store";
 import { Course } from "@/types";
@@ -104,6 +104,13 @@ function DraggableCatalogCard({ course }: { course: Course }) {
             </span>
           )}
         </div>
+        {/* Unverifiable availability warning */}
+        {!course.vorlesungTerm && (
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-500/80 bg-amber-500/8 border border-amber-500/15 rounded-lg px-2 py-1">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            Cannot verify if this course is currently offered
+          </div>
+        )}
       </div>
     </div>
   );
