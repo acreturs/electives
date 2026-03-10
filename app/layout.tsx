@@ -7,8 +7,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Semester Planner · TUM Informatics",
-  description: "Plan your master's degree semester by semester",
+  title: "Novaro-Build",
+  description: "Studyplanner TUM",
   icons: { icon: "/favicon.svg" },
 };
 
